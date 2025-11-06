@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votación de Alumnos - Sistema de Encuestas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container student-view">
+        <header>
+            <h1>🎓 Panel de Votación</h1>
+            <p class="subtitle">Sistema de Encuestas - Alumnos</p>
+        </header>
+
+        <!-- Estado de conexión -->
+        <div id="connection-status" class="status-indicator"></div>
+
+        <!-- Contenedor principal -->
+        <div id="main-content">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        let currentSurveyId = null;
+        let hasVoted = false;
+        let studentId = null;
+
+        // Generar ID único para el estudiante (basado en navegador)
+        function getStudentId() {
+            let id = localStorage.getItem('studentId');
+            if (!id) {
+                id = 'student_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('studentId', id);
+            }
+            return id;
+        }
+
+        studentId = getStudentId();
+
+        // Cargar encuesta activa al iniciar
+        window.addEventListener('DOMContentLoaded', () => {
+            loadActiveSurvey();
+            // Actualizar cada 3 segundos
+            setInterval(loadActiveSurvey, 3000);
+        });
+
+        // Cargar encuesta activa
+        async function loadActiveSurvey() {
+            try {
+                const response = await fetch(`${API_URL}/api/active-survey`);
+
+                // Actualizar indicador de conexión
+                updateConnectionStatus(true);
+
+                if (!response.ok) {
+                    showError('Error al cargar la encuesta');
+                    return;
+                }
+
+                const survey = await response.json();
+
+                if (!survey) {
+                    showNoSurvey();
+                    return;
+                }
+
+                // Si es una nueva encuesta, resetear el estado de votado
+                if (currentSurveyId !== survey.id) {
+                    currentSurveyId = survey.id;
+                    hasVoted = false;
+                }
+
+                showSurvey(survey);
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateConnectionStatus(false);
+                showError('Error de conexión con el servidor');
+            }
+        }
+
+        // Actualizar indicador de conexión
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connection-status');
+            if (connected) {
+                indicator.className = 'status-indicator connected';
+                indicator.innerHTML = '🟢 Conectado';
+            } else {
+                indicator.className = 'status-indicator disconnected';
+                indicator.innerHTML = '🔴 Desconectado';
+            }
+        }
+
+        // Mostrar encuesta
+        function showSurvey(survey) {
+            const content = document.getElementById('main-content');
+
+            if (hasVoted) {
+                showResults(survey);
+                return;
+            }
+
+            let html = `
+                <div class="survey-voting">
+                    <h2>${survey.question}</h2>
+                    <p class="survey-info">Selecciona una opción para votar</p>
+
+                    <div class="voting-options">
+                        ${survey.options.map((option, index) => `
+                            <button
+                                class="vote-option"
+                                onclick="vote('${option}')"
+                            >
+                                <span class="option-letter">${String.fromCharCode(65 + index)}</span>
+                                <span class="option-text">${option}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        }
+
+        // Votar
+        async function vote(option) {
+            if (hasVoted) {
+                alert('Ya has votado en esta encuesta');
+                return;
+            }
+
+            if (!confirm(`¿Confirmas tu voto por: ${option}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        surveyId: currentSurveyId,
+                        option: option,
+                        studentId: studentId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    hasVoted = true;
+                    alert('✓ Voto registrado correctamente');
+                    loadActiveSurvey(); // Recargar para mostrar resultados
+                } else {
+                    alert(data.error || 'Error al registrar el voto');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Mostrar resultados después de votar
+        function showResults(survey) {
+            const content = document.getElementById('main-content');
+            const totalVotes = survey.results.reduce((sum, r) => sum + r.count, 0);
+            const maxVotes = Math.max(...survey.results.map(r => r.count), 1);
+
+            let html = `
+                <div class="survey-results">
+                    <h2>✓ Voto Registrado</h2>
+                    <h3>${survey.question}</h3>
+                    <p class="survey-info">Resultados en tiempo real</p>
+                    <p class="total-votes">Total de votos: ${totalVotes}</p>
+
+                    <div class="results">
+                        ${survey.results.map(result => {
+                            const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
+                            const barWidth = totalVotes > 0 ? (result.count / maxVotes * 100) : 0;
+                            return `
+                                <div class="result-item">
+                                    <div class="result-label">${result.option}</div>
+                                    <div class="result-bar-container">
+                                        <div class="result-bar" style="width: ${barWidth}%"></div>
+                                    </div>
+                                    <div class="result-value">${result.count} votos (${percentage}%)</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <p class="info-message">
+                        Los resultados se actualizan automáticamente
+                    </p>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        }
+
+        // Mostrar mensaje de no hay encuesta
+        function showNoSurvey() {
+            const content = document.getElementById('main-content');
+            content.innerHTML = `
+                <div class="no-survey">
+                    <div class="icon">📊</div>
+                    <h2>No hay encuestas activas</h2>
+                    <p>Espera a que el profesor active una encuesta</p>
+                    <div class="spinner"></div>
+                </div>
+            `;
+        }
+
+        // Mostrar error
+        function showError(message) {
+            const content = document.getElementById('main-content');
+            content.innerHTML = `
+                <div class="error-message">
+                    <div class="icon">⚠️</div>
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                    <p class="retry-message">Reintentando...</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

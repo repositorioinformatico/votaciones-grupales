@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel del Profesor - Sistema de Encuestas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Panel del Profesor</h1>
+            <p class="subtitle">Sistema de Encuestas en Tiempo Real</p>
+        </header>
+
+        <!-- Sección de crear encuesta -->
+        <section class="create-survey">
+            <h2>Crear Nueva Encuesta</h2>
+            <div class="form-group">
+                <label for="question">Pregunta de la encuesta:</label>
+                <input type="text" id="question" placeholder="Ej: ¿Cuál es tu lenguaje de programación favorito?">
+            </div>
+
+            <div class="form-group">
+                <label>Opciones de respuesta:</label>
+                <div id="options-container">
+                    <input type="text" class="option-input" placeholder="Opción 1">
+                    <input type="text" class="option-input" placeholder="Opción 2">
+                </div>
+                <button onclick="addOption()" class="btn-secondary">+ Añadir opción</button>
+            </div>
+
+            <button onclick="createSurvey()" class="btn-primary">Crear Encuesta</button>
+        </section>
+
+        <!-- Sección de encuesta activa -->
+        <section class="active-survey" id="active-survey-section" style="display: none;">
+            <h2>Encuesta Activa</h2>
+            <div id="active-survey-content"></div>
+        </section>
+
+        <!-- Sección de historial -->
+        <section class="surveys-history">
+            <h2>Historial de Encuestas</h2>
+            <div id="surveys-list"></div>
+        </section>
+
+        <!-- Sección de utilidades -->
+        <section class="utilities">
+            <button onclick="resetData()" class="btn-danger">🗑️ Limpiar todos los datos</button>
+        </section>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        // Cargar encuestas al iniciar
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSurveys();
+            // Actualizar cada 5 segundos
+            setInterval(loadSurveys, 5000);
+        });
+
+        // Añadir nueva opción
+        function addOption() {
+            const container = document.getElementById('options-container');
+            const optionCount = container.querySelectorAll('.option-input').length + 1;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'option-input';
+            input.placeholder = `Opción ${optionCount}`;
+            container.appendChild(input);
+        }
+
+        // Crear encuesta
+        async function createSurvey() {
+            const question = document.getElementById('question').value.trim();
+            const optionInputs = document.querySelectorAll('.option-input');
+            const options = Array.from(optionInputs)
+                .map(input => input.value.trim())
+                .filter(value => value !== '');
+
+            if (!question) {
+                alert('Por favor, ingresa una pregunta');
+                return;
+            }
+
+            if (options.length < 2) {
+                alert('Por favor, ingresa al menos 2 opciones');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/surveys`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, options })
+                });
+
+                if (response.ok) {
+                    alert('✓ Encuesta creada y activada correctamente');
+                    // Limpiar formulario
+                    document.getElementById('question').value = '';
+                    optionInputs.forEach(input => input.value = '');
+                    loadSurveys();
+                } else {
+                    alert('Error al crear la encuesta');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Cargar encuestas
+        async function loadSurveys() {
+            try {
+                const response = await fetch(`${API_URL}/api/surveys`);
+                const surveys = await response.json();
+
+                // Mostrar encuesta activa
+                const activeSurvey = surveys.find(s => s.status === 'active');
+                if (activeSurvey) {
+                    showActiveSurvey(activeSurvey);
+                } else {
+                    document.getElementById('active-survey-section').style.display = 'none';
+                }
+
+                // Mostrar historial
+                showSurveysHistory(surveys);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Mostrar encuesta activa
+        async function showActiveSurvey(survey) {
+            const section = document.getElementById('active-survey-section');
+            section.style.display = 'block';
+
+            // Obtener resultados
+            const response = await fetch(`${API_URL}/api/surveys/${survey.id}/results`);
+            const data = await response.json();
+
+            const totalVotes = data.totalVotes;
+            const maxVotes = Math.max(...data.results.map(r => r.count), 1);
+
+            let html = `
+                <div class="survey-card active">
+                    <h3>${survey.question}</h3>
+                    <p class="survey-meta">Creada: ${new Date(survey.createdAt).toLocaleString()}</p>
+                    <p class="survey-meta">Total de votos: ${totalVotes}</p>
+
+                    <div class="results">
+                        ${data.results.map(result => {
+                            const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
+                            const barWidth = totalVotes > 0 ? (result.count / maxVotes * 100) : 0;
+                            return `
+                                <div class="result-item">
+                                    <div class="result-label">${result.option}</div>
+                                    <div class="result-bar-container">
+                                        <div class="result-bar" style="width: ${barWidth}%"></div>
+                                    </div>
+                                    <div class="result-value">${result.count} votos (${percentage}%)</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <button onclick="closeSurvey('${survey.id}')" class="btn-warning">Cerrar Encuesta</button>
+                </div>
+            `;
+
+            document.getElementById('active-survey-content').innerHTML = html;
+        }
+
+        // Mostrar historial
+        function showSurveysHistory(surveys) {
+            const closedSurveys = surveys.filter(s => s.status === 'closed');
+            const container = document.getElementById('surveys-list');
+
+            if (closedSurveys.length === 0) {
+                container.innerHTML = '<p class="no-data">No hay encuestas cerradas</p>';
+                return;
+            }
+
+            container.innerHTML = closedSurveys.map(survey => `
+                <div class="survey-card closed">
+                    <h4>${survey.question}</h4>
+                    <p class="survey-meta">Cerrada: ${new Date(survey.createdAt).toLocaleString()}</p>
+                    <button onclick="showResults('${survey.id}')" class="btn-secondary">Ver Resultados</button>
+                </div>
+            `).join('');
+        }
+
+        // Cerrar encuesta
+        async function closeSurvey(id) {
+            if (!confirm('¿Estás seguro de cerrar esta encuesta?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/surveys/${id}/close`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    alert('✓ Encuesta cerrada correctamente');
+                    loadSurveys();
+                } else {
+                    alert('Error al cerrar la encuesta');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Ver resultados
+        async function showResults(id) {
+            try {
+                const response = await fetch(`${API_URL}/api/surveys/${id}/results`);
+                const data = await response.json();
+
+                const totalVotes = data.totalVotes;
+                let resultsText = `Encuesta: ${data.survey.question}\n\n`;
+                resultsText += `Total de votos: ${totalVotes}\n\n`;
+
+                data.results.forEach(result => {
+                    const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
+                    resultsText += `${result.option}: ${result.count} votos (${percentage}%)\n`;
+                });
+
+                alert(resultsText);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al obtener resultados');
+            }
+        }
+
+        // Limpiar datos
+        async function resetData() {
+            if (!confirm('¿Estás seguro? Esto eliminará TODAS las encuestas y votos.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/reset`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    alert('✓ Datos eliminados correctamente');
+                    loadSurveys();
+                } else {
+                    alert('Error al eliminar datos');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión con el servidor');
+            }
+        }
+    </script>
+</body>
+</html>
