@@ -54,6 +54,28 @@ function saveVotes(data) {
   fs.writeFileSync(VOTES_FILE, JSON.stringify(data, null, 2));
 }
 
+// Generar código aleatorio de 3 caracteres (a-z, A-Z, 0-9)
+function generateCode() {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 3; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// Generar array de códigos únicos
+function generateUniqueCodes(count) {
+  const codes = new Set();
+  while (codes.size < count) {
+    codes.add(generateCode());
+  }
+  return Array.from(codes).map(code => ({
+    code: code,
+    used: false
+  }));
+}
+
 // ========== ENDPOINTS ==========
 
 // Obtener todas las encuestas (para el profesor)
@@ -89,10 +111,14 @@ app.get('/api/active-survey', (req, res) => {
 
 // Crear nueva encuesta
 app.post('/api/surveys', (req, res) => {
-  const { question, options } = req.body;
+  const { question, options, studentCount } = req.body;
 
   if (!question || !options || options.length < 2) {
     return res.status(400).json({ error: 'Se requiere pregunta y al menos 2 opciones' });
+  }
+
+  if (!studentCount || studentCount < 1) {
+    return res.status(400).json({ error: 'Se requiere el número de alumnos (mínimo 1)' });
   }
 
   const data = readSurveys();
@@ -100,12 +126,17 @@ app.post('/api/surveys', (req, res) => {
   // Cerrar cualquier encuesta activa anterior
   data.surveys = data.surveys.map(s => ({ ...s, status: 'closed' }));
 
+  // Generar códigos únicos
+  const codes = generateUniqueCodes(studentCount);
+
   const newSurvey = {
     id: Date.now().toString(),
     question,
     options,
     status: 'active',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    studentCount: studentCount,
+    codes: codes
   };
 
   data.surveys.push(newSurvey);
@@ -132,10 +163,14 @@ app.post('/api/surveys/:id/close', (req, res) => {
 
 // Registrar un voto
 app.post('/api/vote', (req, res) => {
-  const { surveyId, option, studentId, fingerprint } = req.body;
+  const { surveyId, option, voteCode, fingerprint } = req.body;
 
   if (!surveyId || !option) {
     return res.status(400).json({ error: 'Se requiere surveyId y option' });
+  }
+
+  if (!voteCode) {
+    return res.status(400).json({ error: 'Se requiere un código de votación' });
   }
 
   // Capturar IP del cliente
@@ -143,32 +178,43 @@ app.post('/api/vote', (req, res) => {
 
   // Verificar que la encuesta existe y está activa
   const surveysData = readSurveys();
-  const survey = surveysData.surveys.find(s => s.id === surveyId && s.status === 'active');
+  const surveyIndex = surveysData.surveys.findIndex(s => s.id === surveyId && s.status === 'active');
 
-  if (!survey) {
+  if (surveyIndex === -1) {
     return res.status(400).json({ error: 'La encuesta no está activa' });
   }
+
+  const survey = surveysData.surveys[surveyIndex];
 
   // Verificar que la opción es válida
   if (!survey.options.includes(option)) {
     return res.status(400).json({ error: 'Opción no válida' });
   }
 
-  const votesData = readVotes();
+  // Verificar que el código existe en esta encuesta
+  const codeIndex = survey.codes.findIndex(c => c.code === voteCode);
 
-  // Verificar si el estudiante ya votó (opcional - comentar si se permite votar varias veces)
-  if (studentId) {
-    const existingVote = votesData.votes.find(v => v.surveyId === surveyId && v.studentId === studentId);
-    if (existingVote) {
-      return res.status(400).json({ error: 'Ya has votado en esta encuesta' });
-    }
+  if (codeIndex === -1) {
+    return res.status(400).json({ error: 'Código inválido' });
   }
 
+  // Verificar que el código no ha sido usado
+  if (survey.codes[codeIndex].used) {
+    return res.status(400).json({ error: 'Este código ya fue utilizado' });
+  }
+
+  // Marcar el código como usado
+  survey.codes[codeIndex].used = true;
+  surveysData.surveys[surveyIndex] = survey;
+  saveSurveys(surveysData);
+
+  // Registrar el voto
+  const votesData = readVotes();
   const vote = {
     id: Date.now().toString(),
     surveyId,
     option,
-    studentId: studentId || 'anonymous',
+    voteCode: voteCode,
     timestamp: new Date().toISOString(),
     ip: clientIp,
     fingerprint: fingerprint || 'unknown'
@@ -230,10 +276,10 @@ app.get('/api/surveys/:id/stats', (req, res) => {
   // Mapear votos con todos los detalles
   const detailedVotes = surveyVotes.map(vote => ({
     option: vote.option,
+    voteCode: vote.voteCode || 'no disponible',
     timestamp: vote.timestamp,
     ip: vote.ip || 'no disponible',
-    fingerprint: vote.fingerprint || 'unknown',
-    voteId: vote.id
+    fingerprint: vote.fingerprint || 'unknown'
   }));
 
   res.json({
