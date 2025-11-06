@@ -7,7 +7,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #f5f5f5;
     min-height: 100vh;
     padding: 20px;
     color: #333;
@@ -21,37 +21,42 @@ body {
 /* Header */
 header {
     text-align: center;
-    color: white;
+    color: #000;
     margin-bottom: 30px;
     padding: 20px;
+    background: white;
+    border-radius: 4px;
+    border-bottom: 3px solid #000;
 }
 
 header h1 {
     font-size: 2.5em;
     margin-bottom: 10px;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
 }
 
 .subtitle {
     font-size: 1.2em;
-    opacity: 0.9;
+    color: #666;
+    font-weight: 300;
 }
 
 /* Secciones */
 section {
     background: white;
-    border-radius: 15px;
+    border-radius: 4px;
     padding: 30px;
     margin-bottom: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid #e0e0e0;
 }
 
 section h2 {
-    color: #667eea;
+    color: #000;
     margin-bottom: 20px;
     font-size: 1.8em;
-    border-bottom: 3px solid #667eea;
+    border-bottom: 2px solid #000;
     padding-bottom: 10px;
+    font-weight: 700;
 }
 
 /* Formulario */
@@ -63,21 +68,22 @@ section h2 {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    color: #555;
+    color: #333;
 }
 
 .form-group input[type="text"] {
     width: 100%;
     padding: 12px;
     border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: 4px;
     font-size: 1em;
     transition: border-color 0.3s;
+    background: white;
 }
 
 .form-group input[type="text"]:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #000;
 }
 
 #options-container {
@@ -90,90 +96,99 @@ section h2 {
 .option-input {
     padding: 10px;
     border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: 4px;
     font-size: 1em;
     transition: border-color 0.3s;
+    background: white;
 }
 
 .option-input:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #000;
 }
 
 /* Botones */
 button {
     padding: 12px 24px;
-    border: none;
-    border-radius: 8px;
+    border: 2px solid #000;
+    border-radius: 4px;
     font-size: 1em;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s;
     margin: 5px;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #000;
     color: white;
     padding: 15px 40px;
     font-size: 1.1em;
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    background: #333;
+    transform: translateY(-1px);
 }
 
 .btn-secondary {
-    background: #f0f0f0;
-    color: #333;
+    background: white;
+    color: #000;
+    border: 2px solid #e0e0e0;
 }
 
 .btn-secondary:hover {
-    background: #e0e0e0;
+    background: #f5f5f5;
+    border-color: #000;
 }
 
 .btn-warning {
-    background: #ffa726;
+    background: #666;
     color: white;
+    border-color: #666;
 }
 
 .btn-warning:hover {
-    background: #fb8c00;
+    background: #555;
+    border-color: #555;
 }
 
 .btn-danger {
-    background: #ef5350;
+    background: #000;
     color: white;
+    border-color: #000;
 }
 
 .btn-danger:hover {
-    background: #e53935;
+    background: #333;
 }
 
 /* Cards de encuestas */
 .survey-card {
-    background: #f9f9f9;
-    border-radius: 10px;
+    background: #fafafa;
+    border-radius: 4px;
     padding: 20px;
     margin-bottom: 15px;
-    border-left: 5px solid #667eea;
+    border-left: 4px solid #000;
+    border: 1px solid #e0e0e0;
+    border-left: 4px solid #000;
 }
 
 .survey-card.active {
-    border-left-color: #4caf50;
-    background: #e8f5e9;
+    border-left-color: #000;
+    background: #f5f5f5;
 }
 
 .survey-card.closed {
-    border-left-color: #9e9e9e;
-    opacity: 0.8;
+    border-left-color: #999;
+    opacity: 0.6;
 }
 
 .survey-card h3,
 .survey-card h4 {
-    color: #333;
+    color: #000;
     margin-bottom: 10px;
+    font-weight: 600;
 }
 
 .survey-meta {
@@ -194,19 +209,20 @@ button {
 .result-label {
     font-weight: 600;
     margin-bottom: 5px;
-    color: #333;
+    color: #000;
 }
 
 .result-bar-container {
     background: #e0e0e0;
-    border-radius: 10px;
+    border-radius: 4px;
     height: 30px;
     overflow: hidden;
     margin: 5px 0;
+    border: 1px solid #ccc;
 }
 
 .result-bar {
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: #000;
     height: 100%;
     transition: width 0.5s ease;
     display: flex;
@@ -231,26 +247,29 @@ button {
 .status-indicator {
     text-align: center;
     padding: 10px;
-    border-radius: 10px;
+    border-radius: 4px;
     margin-bottom: 20px;
     font-weight: 600;
+    border: 2px solid;
 }
 
 .status-indicator.connected {
-    background: #c8e6c9;
-    color: #2e7d32;
+    background: #f5f5f5;
+    color: #000;
+    border-color: #000;
 }
 
 .status-indicator.disconnected {
-    background: #ffcdd2;
-    color: #c62828;
+    background: #000;
+    color: white;
+    border-color: #000;
 }
 
 #main-content {
     background: white;
-    border-radius: 15px;
+    border-radius: 4px;
     padding: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid #e0e0e0;
 }
 
 /* Opciones de votación */
@@ -265,23 +284,23 @@ button {
     display: flex;
     align-items: center;
     padding: 20px;
-    background: #f5f5f5;
-    border: 3px solid transparent;
-    border-radius: 12px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s;
     text-align: left;
 }
 
 .vote-option:hover {
-    background: #667eea;
+    background: #000;
     color: white;
-    transform: translateX(10px);
-    border-color: #667eea;
+    border-color: #000;
+    transform: translateX(5px);
 }
 
 .option-letter {
-    background: #667eea;
+    background: #000;
     color: white;
     width: 40px;
     height: 40px;
@@ -297,7 +316,7 @@ button {
 
 .vote-option:hover .option-letter {
     background: white;
-    color: #667eea;
+    color: #000;
 }
 
 .option-text {
@@ -320,8 +339,9 @@ button {
 
 .no-survey h2,
 .error-message h2 {
-    color: #667eea;
+    color: #000;
     margin-bottom: 10px;
+    font-weight: 600;
 }
 
 .no-survey p,
@@ -345,13 +365,14 @@ button {
 }
 
 .total-votes {
-    background: #e3f2fd;
+    background: #f5f5f5;
     padding: 10px;
-    border-radius: 8px;
+    border-radius: 4px;
     text-align: center;
     font-weight: 600;
-    color: #1976d2;
+    color: #000;
     margin: 15px 0;
+    border: 2px solid #e0e0e0;
 }
 
 .info-message {
@@ -361,7 +382,7 @@ button {
     margin-top: 20px;
     padding: 15px;
     background: #f5f5f5;
-    border-radius: 8px;
+    border-radius: 4px;
 }
 
 /* Spinner de carga */
@@ -369,8 +390,8 @@ button {
     margin: 30px auto;
     width: 50px;
     height: 50px;
-    border: 5px solid #f3f3f3;
-    border-top: 5px solid #667eea;
+    border: 5px solid #e0e0e0;
+    border-top: 5px solid #000;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -387,9 +408,10 @@ button {
 
 /* Resultados después de votar */
 .survey-results h2 {
-    color: #4caf50;
+    color: #000;
     text-align: center;
     margin-bottom: 20px;
+    font-weight: 700;
 }
 
 .survey-results h3 {
