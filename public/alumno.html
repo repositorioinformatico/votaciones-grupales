@@ -136,18 +136,6 @@
             let html = `
                 <div class="survey-voting">
                     <h2>${survey.question}</h2>
-                    <p class="survey-info">Ingresa tu código para votar</p>
-
-                    <div class="code-input-container">
-                        <input
-                            type="text"
-                            id="vote-code"
-                            placeholder="Código (3 caracteres)"
-                            maxlength="3"
-                            style="font-size: 1.5em; text-align: center; text-transform: uppercase; letter-spacing: 3px; padding: 15px; border: 2px solid #000; border-radius: 4px; width: 100%; max-width: 300px; margin: 20px auto; display: block; font-family: 'Courier New', monospace;"
-                        >
-                    </div>
-
                     <p class="survey-info">Selecciona una opción para votar</p>
 
                     <div class="voting-options">
@@ -174,17 +162,7 @@
                 return;
             }
 
-            // Obtener código del input
-            const voteCodeInput = document.getElementById('vote-code');
-            const voteCode = voteCodeInput ? voteCodeInput.value.trim() : '';
-
-            if (!voteCode || voteCode.length !== 3) {
-                alert('Por favor, ingresa un código válido de 3 caracteres');
-                voteCodeInput.focus();
-                return;
-            }
-
-            if (!confirm(`¿Confirmas tu voto por: ${option}?\nCódigo: ${voteCode.toUpperCase()}`)) {
+            if (!confirm(`¿Confirmas tu voto por: ${option}?`)) {
                 return;
             }
 
@@ -195,7 +173,6 @@
                     body: JSON.stringify({
                         surveyId: currentSurveyId,
                         option: option,
-                        voteCode: voteCode,
                         fingerprint: deviceFingerprint
                     })
                 });

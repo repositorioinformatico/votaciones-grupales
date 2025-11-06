@@ -30,9 +30,9 @@
             </div>
 
             <div class="form-group">
-                <label for="student-count">Número de alumnos que votarán:</label>
-                <input type="number" id="student-count" placeholder="Ej: 8" min="1" value="8">
-                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">Se generarán códigos únicos de 3 caracteres para cada alumno</p>
+                <label for="max-votes">Número máximo de votos permitidos:</label>
+                <input type="number" id="max-votes" placeholder="Ej: 8" min="1" value="8">
+                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">Cuando se alcance este número, no se permitirán más votos</p>
             </div>
 
             <button onclick="createSurvey()" class="btn-primary">Crear Encuesta</button>
@@ -89,7 +89,7 @@
         // Crear encuesta
         async function createSurvey() {
             const question = document.getElementById('question').value.trim();
-            const studentCount = parseInt(document.getElementById('student-count').value);
+            const maxVotes = parseInt(document.getElementById('max-votes').value);
             const optionInputs = document.querySelectorAll('.option-input');
             const options = Array.from(optionInputs)
                 .map(input => input.value.trim())
@@ -105,8 +105,8 @@
                 return;
             }
 
-            if (!studentCount || studentCount < 1) {
-                alert('Por favor, ingresa un número válido de alumnos (mínimo 1)');
+            if (!maxVotes || maxVotes < 1) {
+                alert('Por favor, ingresa un número válido de votos máximos (mínimo 1)');
                 return;
             }
 
@@ -114,18 +114,15 @@
                 const response = await fetch(`${API_URL}/api/surveys`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question, options, studentCount })
+                    body: JSON.stringify({ question, options, maxVotes })
                 });
 
                 if (response.ok) {
-                    const data = await response.json();
-
-                    // Mostrar códigos generados
-                    showCodesModal(data);
+                    alert('✓ Encuesta creada y activada correctamente');
 
                     // Limpiar formulario
                     document.getElementById('question').value = '';
-                    document.getElementById('student-count').value = '8';
+                    document.getElementById('max-votes').value = '8';
                     optionInputs.forEach(input => input.value = '');
                     loadSurveys();
                 } else {
@@ -136,28 +133,6 @@
                 console.error('Error:', error);
                 alert('Error de conexión con el servidor');
             }
-        }
-
-        // Mostrar modal con códigos generados
-        function showCodesModal(survey) {
-            const codesHtml = survey.codes.map((c, i) =>
-                `<div class="code-item"><strong>${i + 1}.</strong> <code>${c.code}</code></div>`
-            ).join('');
-
-            const html = `
-                <h3>✓ Encuesta Creada</h3>
-                <p><strong>${survey.question}</strong></p>
-                <p>Se han generado <strong>${survey.codes.length} códigos</strong> únicos.</p>
-                <p style="color: #666;">Reparte estos códigos a los alumnos para que puedan votar:</p>
-                <div class="codes-grid">
-                    ${codesHtml}
-                </div>
-                <br>
-                <button onclick="closeStatsModal()" class="btn-primary">Entendido</button>
-            `;
-
-            document.getElementById('stats-content').innerHTML = html;
-            document.getElementById('stats-modal').style.display = 'block';
         }
 
         // Cargar encuestas
@@ -322,20 +297,17 @@
                     return;
                 }
 
-                const usedCodes = data.survey.codes ? data.survey.codes.filter(c => c.used).length : 0;
-                const totalCodes = data.survey.codes ? data.survey.codes.length : 0;
+                const maxVotes = data.survey.maxVotes || 0;
 
                 let html = `
                     <h3>${data.survey.question}</h3>
-                    <p><strong>Total de votos:</strong> ${data.totalVotes} / ${totalCodes}</p>
-                    <p><strong>Códigos usados:</strong> ${usedCodes} de ${totalCodes}</p>
+                    <p><strong>Total de votos:</strong> ${data.totalVotes} / ${maxVotes}</p>
                     <p><strong>Creada:</strong> ${new Date(data.survey.createdAt).toLocaleString()}</p>
                     <p><strong>Estado:</strong> ${data.survey.status === 'active' ? 'Activa' : 'Cerrada'}</p>
                     <br>
                     <table class="stats-table">
                         <thead>
                             <tr>
-                                <th>Código</th>
                                 <th>Opción Votada</th>
                                 <th>IP</th>
                                 <th>Fingerprint</th>
@@ -348,7 +320,7 @@
                 if (data.votes.length === 0) {
                     html += `
                         <tr>
-                            <td colspan="5" style="text-align: center; color: #999;">No hay votos registrados</td>
+                            <td colspan="4" style="text-align: center; color: #999;">No hay votos registrados</td>
                         </tr>
                     `;
                 } else {
@@ -356,7 +328,6 @@
                         const date = new Date(vote.timestamp);
                         html += `
                             <tr>
-                                <td><code style="font-weight: bold; color: #000;">${vote.voteCode}</code></td>
                                 <td><strong>${vote.option}</strong></td>
                                 <td><code>${vote.ip}</code></td>
                                 <td><code>${vote.fingerprint}</code></td>
