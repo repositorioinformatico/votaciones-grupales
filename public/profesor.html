@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel del Profesor - Sistema de Encuestas</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <!-- Pantalla de Login/Setup -->
@@ -285,20 +286,25 @@
                     <p class="survey-meta">Creada: ${new Date(survey.createdAt).toLocaleString()}</p>
                     <p class="survey-meta">Total de votos: ${totalVotes}</p>
 
-                    <div class="results">
-                        ${data.results.map(result => {
-                            const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
-                            const barWidth = totalVotes > 0 ? (result.count / maxVotes * 100) : 0;
-                            return `
-                                <div class="result-item">
-                                    <div class="result-label">${result.option}</div>
-                                    <div class="result-bar-container">
-                                        <div class="result-bar" style="width: ${barWidth}%"></div>
+                    <div class="results-container">
+                        <div class="results-chart">
+                            <canvas id="active-survey-chart"></canvas>
+                        </div>
+                        <div class="results">
+                            ${data.results.map(result => {
+                                const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
+                                const barWidth = totalVotes > 0 ? (result.count / maxVotes * 100) : 0;
+                                return `
+                                    <div class="result-item">
+                                        <div class="result-label">${result.option}</div>
+                                        <div class="result-bar-container">
+                                            <div class="result-bar" style="width: ${barWidth}%"></div>
+                                        </div>
+                                        <div class="result-value">${result.count} votos (${percentage}%)</div>
                                     </div>
-                                    <div class="result-value">${result.count} votos (${percentage}%)</div>
-                                </div>
-                            `;
-                        }).join('')}
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
 
                     <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Ver Estadísticas</button>
@@ -307,6 +313,95 @@
             `;
 
             document.getElementById('active-survey-content').innerHTML = html;
+
+            // Generar gráfico de pastel después de inyectar HTML
+            if (totalVotes > 0) {
+                createPieChart(data.results);
+            }
+        }
+
+        // Variable global para el gráfico (para poder destruirlo al actualizar)
+        let activeSurveyChartInstance = null;
+
+        // Crear gráfico de pastel
+        function createPieChart(results) {
+            const canvas = document.getElementById('active-survey-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior si existe
+            if (activeSurveyChartInstance) {
+                activeSurveyChartInstance.destroy();
+            }
+
+            const ctx = canvas.getContext('2d');
+
+            // Extraer datos
+            const labels = results.map(r => r.option);
+            const data = results.map(r => r.count);
+
+            // Generar colores en escala de grises (minimalista)
+            const colors = generateGrayscaleColors(results.length);
+
+            activeSurveyChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderColor: '#000',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#000',
+                                font: {
+                                    size: 13,
+                                    weight: '600'
+                                },
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#000',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#000',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} votos (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Generar colores en escala de grises
+        function generateGrayscaleColors(count) {
+            const colors = [];
+            const step = 180 / (count + 1); // Rango de 75 a 255 (evitar muy oscuro y muy claro)
+
+            for (let i = 0; i < count; i++) {
+                const gray = Math.round(75 + (step * (i + 1)));
+                colors.push(`rgb(${gray}, ${gray}, ${gray})`);
+            }
+
+            return colors;
         }
 
         // Mostrar historial

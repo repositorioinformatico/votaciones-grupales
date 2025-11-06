@@ -198,8 +198,25 @@ button {
 }
 
 /* Resultados */
-.results {
+.results-container {
+    display: flex;
+    gap: 30px;
     margin: 20px 0;
+    align-items: flex-start;
+}
+
+.results-chart {
+    flex-shrink: 0;
+    width: 300px;
+    background: white;
+    padding: 20px;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+}
+
+.results {
+    flex: 1;
+    margin: 0;
 }
 
 .result-item {
@@ -573,6 +590,16 @@ button {
     .stats-table th,
     .stats-table td {
         padding: 8px 5px;
+    }
+
+    .results-container {
+        flex-direction: column;
+    }
+
+    .results-chart {
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
     }
 }
 
