@@ -7,9 +7,26 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
+    <!-- Pantalla de Login/Setup -->
+    <div id="auth-screen" class="auth-screen">
+        <div class="auth-box">
+            <h1>🔐 Acceso Profesor</h1>
+            <p id="auth-message">Ingresa la contraseña maestra</p>
+
+            <div class="form-group">
+                <input type="password" id="auth-password" placeholder="Contraseña" style="font-size: 1.1em; padding: 15px;">
+            </div>
+
+            <button onclick="handleAuth()" class="btn-primary" style="width: 100%;">Acceder</button>
+
+            <p id="auth-error" style="color: #ef5350; margin-top: 15px; display: none;"></p>
+        </div>
+    </div>
+
+    <div class="container" id="main-panel" style="display: none;">
         <header>
             <h1>📊 Panel del Profesor</h1>
+            <button onclick="logout()" class="btn-secondary" style="float: right;">Cerrar Sesión</button>
         </header>
 
         <!-- Sección de crear encuesta -->
@@ -67,13 +84,107 @@
 
     <script>
         const API_URL = window.location.origin;
+        let adminPassword = null; // Contraseña en memoria
 
-        // Cargar encuestas al iniciar
-        window.addEventListener('DOMContentLoaded', () => {
+        // ========== AUTENTICACIÓN ==========
+
+        // Cargar estado de autenticación al iniciar
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkAuthStatus();
+        });
+
+        // Verificar si hay contraseña establecida
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/auth/status`);
+                const data = await response.json();
+
+                if (!data.hasPassword) {
+                    document.getElementById('auth-message').textContent = 'Establece una contraseña maestra (primera vez)';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Manejar autenticación (login o setup)
+        async function handleAuth() {
+            const password = document.getElementById('auth-password').value;
+
+            if (!password || password.length < 4) {
+                showAuthError('La contraseña debe tener al menos 4 caracteres');
+                return;
+            }
+
+            try {
+                // Primero intentar login
+                let response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                // Si falla, intentar setup (primera vez)
+                if (!response.ok) {
+                    response = await fetch(`${API_URL}/api/auth/setup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                }
+
+                if (response.ok) {
+                    adminPassword = password;
+                    showMainPanel();
+                } else {
+                    const error = await response.json();
+                    showAuthError(error.error || 'Error de autenticación');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAuthError('Error de conexión con el servidor');
+            }
+        }
+
+        // Mostrar error de autenticación
+        function showAuthError(message) {
+            const errorEl = document.getElementById('auth-error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // Mostrar panel principal
+        function showMainPanel() {
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('main-panel').style.display = 'block';
             loadSurveys();
             // Actualizar cada 5 segundos
             setInterval(loadSurveys, 5000);
-        });
+        }
+
+        // Cerrar sesión
+        function logout() {
+            if (confirm('¿Estás seguro de cerrar sesión?')) {
+                adminPassword = null;
+                document.getElementById('auth-screen').style.display = 'flex';
+                document.getElementById('main-panel').style.display = 'none';
+                document.getElementById('auth-password').value = '';
+            }
+        }
+
+        // Añadir header de autenticación a fetch
+        function authFetch(url, options = {}) {
+            if (!options.headers) {
+                options.headers = {};
+            }
+            options.headers['x-admin-password'] = adminPassword;
+            return fetch(url, options);
+        }
+
+        // ========== FIN AUTENTICACIÓN ==========
 
         // Añadir nueva opción
         function addOption() {
@@ -111,7 +222,7 @@
             }
 
             try {
-                const response = await fetch(`${API_URL}/api/surveys`, {
+                const response = await authFetch(`${API_URL}/api/surveys`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question, options, maxVotes })
@@ -138,7 +249,7 @@
         // Cargar encuestas
         async function loadSurveys() {
             try {
-                const response = await fetch(`${API_URL}/api/surveys`);
+                const response = await authFetch(`${API_URL}/api/surveys`);
                 const surveys = await response.json();
 
                 // Mostrar encuesta activa
@@ -225,7 +336,7 @@
             }
 
             try {
-                const response = await fetch(`${API_URL}/api/surveys/${id}/close`, {
+                const response = await authFetch(`${API_URL}/api/surveys/${id}/close`, {
                     method: 'POST'
                 });
 
@@ -270,7 +381,7 @@
             }
 
             try {
-                const response = await fetch(`${API_URL}/api/reset`, {
+                const response = await authFetch(`${API_URL}/api/reset`, {
                     method: 'POST'
                 });
 
@@ -289,7 +400,7 @@
         // Mostrar estadísticas detalladas
         async function showStats(surveyId) {
             try {
-                const response = await fetch(`${API_URL}/api/surveys/${surveyId}/stats`);
+                const response = await authFetch(`${API_URL}/api/surveys/${surveyId}/stats`);
                 const data = await response.json();
 
                 if (!response.ok) {

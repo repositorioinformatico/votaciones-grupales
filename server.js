@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3000;
@@ -15,6 +16,7 @@ app.use(express.static('public'));
 const DATA_DIR = path.join(__dirname, 'data');
 const SURVEYS_FILE = path.join(DATA_DIR, 'surveys.json');
 const VOTES_FILE = path.join(DATA_DIR, 'votes.json');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 // Inicializar directorio y archivos JSON si no existen
 function initializeDataFiles() {
@@ -29,6 +31,9 @@ function initializeDataFiles() {
   }
   if (!fs.existsSync(VOTES_FILE)) {
     fs.writeFileSync(VOTES_FILE, JSON.stringify({ votes: [] }, null, 2));
+  }
+  if (!fs.existsSync(CONFIG_FILE)) {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ passwordHash: null }, null, 2));
   }
 }
 
@@ -54,10 +59,91 @@ function saveVotes(data) {
   fs.writeFileSync(VOTES_FILE, JSON.stringify(data, null, 2));
 }
 
+// Leer configuración
+function readConfig() {
+  const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+  return JSON.parse(data);
+}
+
+// Guardar configuración
+function saveConfig(data) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2));
+}
+
+// Hashear contraseña
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+// Validar contraseña
+function validatePassword(password) {
+  const config = readConfig();
+  if (!config.passwordHash) {
+    return false; // No hay contraseña establecida
+  }
+  return hashPassword(password) === config.passwordHash;
+}
+
+// Middleware para validar autenticación
+function requireAuth(req, res, next) {
+  const password = req.headers['x-admin-password'];
+
+  if (!password || !validatePassword(password)) {
+    return res.status(401).json({ error: 'No autorizado - contraseña incorrecta' });
+  }
+
+  next();
+}
+
 // ========== ENDPOINTS ==========
 
+// ========== AUTENTICACIÓN ==========
+
+// Verificar si hay contraseña establecida
+app.get('/api/auth/status', (req, res) => {
+  const config = readConfig();
+  res.json({ hasPassword: config.passwordHash !== null });
+});
+
+// Establecer contraseña por primera vez
+app.post('/api/auth/setup', (req, res) => {
+  const { password } = req.body;
+
+  if (!password || password.length < 4) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+  }
+
+  const config = readConfig();
+
+  if (config.passwordHash !== null) {
+    return res.status(400).json({ error: 'Ya existe una contraseña establecida' });
+  }
+
+  config.passwordHash = hashPassword(password);
+  saveConfig(config);
+
+  res.json({ success: true, message: 'Contraseña establecida correctamente' });
+});
+
+// Validar contraseña (login)
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ error: 'Se requiere contraseña' });
+  }
+
+  if (validatePassword(password)) {
+    res.json({ success: true, message: 'Autenticación correcta' });
+  } else {
+    res.status(401).json({ error: 'Contraseña incorrecta' });
+  }
+});
+
+// ========== ENDPOINTS PROFESOR (PROTEGIDOS) ==========
+
 // Obtener todas las encuestas (para el profesor)
-app.get('/api/surveys', (req, res) => {
+app.get('/api/surveys', requireAuth, (req, res) => {
   const data = readSurveys();
   res.json(data.surveys);
 });
@@ -88,7 +174,7 @@ app.get('/api/active-survey', (req, res) => {
 });
 
 // Crear nueva encuesta
-app.post('/api/surveys', (req, res) => {
+app.post('/api/surveys', requireAuth, (req, res) => {
   const { question, options, maxVotes } = req.body;
 
   if (!question || !options || options.length < 2) {
@@ -120,7 +206,7 @@ app.post('/api/surveys', (req, res) => {
 });
 
 // Cerrar encuesta activa
-app.post('/api/surveys/:id/close', (req, res) => {
+app.post('/api/surveys/:id/close', requireAuth, (req, res) => {
   const { id } = req.params;
   const data = readSurveys();
 
@@ -218,14 +304,14 @@ app.get('/api/surveys/:id/results', (req, res) => {
 });
 
 // Eliminar todos los datos (reset)
-app.post('/api/reset', (req, res) => {
+app.post('/api/reset', requireAuth, (req, res) => {
   saveSurveys({ surveys: [] });
   saveVotes({ votes: [] });
   res.json({ success: true, message: 'Datos reiniciados' });
 });
 
 // Obtener estadísticas detalladas de una encuesta (con IPs y fingerprints)
-app.get('/api/surveys/:id/stats', (req, res) => {
+app.get('/api/surveys/:id/stats', requireAuth, (req, res) => {
   const { id } = req.params;
 
   const surveysData = readSurveys();
