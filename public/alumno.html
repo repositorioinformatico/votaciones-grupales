@@ -38,7 +38,37 @@
             return id;
         }
 
+        // Generar fingerprint del navegador (checksum)
+        function generateFingerprint() {
+            const components = [
+                navigator.userAgent,
+                navigator.language,
+                screen.colorDepth,
+                screen.width + 'x' + screen.height,
+                new Date().getTimezoneOffset(),
+                navigator.hardwareConcurrency || 'unknown',
+                navigator.platform,
+                navigator.vendor,
+                navigator.maxTouchPoints || 0
+            ];
+
+            // Crear string combinado
+            const fingerString = components.join('|');
+
+            // Generar hash simple (checksum)
+            let hash = 0;
+            for (let i = 0; i < fingerString.length; i++) {
+                const char = fingerString.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+
+            // Convertir a hexadecimal y retornar checksum
+            return Math.abs(hash).toString(16).toUpperCase();
+        }
+
         studentId = getStudentId();
+        const deviceFingerprint = generateFingerprint();
 
         // Cargar encuesta activa al iniciar
         window.addEventListener('DOMContentLoaded', () => {
@@ -143,7 +173,8 @@
                     body: JSON.stringify({
                         surveyId: currentSurveyId,
                         option: option,
-                        studentId: studentId
+                        studentId: studentId,
+                        fingerprint: deviceFingerprint
                     })
                 });
 

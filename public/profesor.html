@@ -50,6 +50,15 @@
         </section>
     </div>
 
+    <!-- Modal de Estadísticas -->
+    <div id="stats-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeStatsModal()">&times;</span>
+            <h2>📊 Estadísticas Detalladas</h2>
+            <div id="stats-content"></div>
+        </div>
+    </div>
+
     <script>
         const API_URL = window.location.origin;
 
@@ -166,6 +175,7 @@
                         }).join('')}
                     </div>
 
+                    <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Ver Estadísticas</button>
                     <button onclick="closeSurvey('${survey.id}')" class="btn-warning">Cerrar Encuesta</button>
                 </div>
             `;
@@ -188,6 +198,7 @@
                     <h4>${survey.question}</h4>
                     <p class="survey-meta">Cerrada: ${new Date(survey.createdAt).toLocaleString()}</p>
                     <button onclick="showResults('${survey.id}')" class="btn-secondary">Ver Resultados</button>
+                    <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Estadísticas</button>
                 </div>
             `).join('');
         }
@@ -257,6 +268,82 @@
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Mostrar estadísticas detalladas
+        async function showStats(surveyId) {
+            try {
+                const response = await fetch(`${API_URL}/api/surveys/${surveyId}/stats`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error al obtener estadísticas');
+                    return;
+                }
+
+                let html = `
+                    <h3>${data.survey.question}</h3>
+                    <p><strong>Total de votos:</strong> ${data.totalVotes}</p>
+                    <p><strong>Creada:</strong> ${new Date(data.survey.createdAt).toLocaleString()}</p>
+                    <p><strong>Estado:</strong> ${data.survey.status === 'active' ? 'Activa' : 'Cerrada'}</p>
+                    <br>
+                    <table class="stats-table">
+                        <thead>
+                            <tr>
+                                <th>Opción Votada</th>
+                                <th>IP</th>
+                                <th>Fingerprint</th>
+                                <th>Fecha/Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                if (data.votes.length === 0) {
+                    html += `
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: #999;">No hay votos registrados</td>
+                        </tr>
+                    `;
+                } else {
+                    data.votes.forEach(vote => {
+                        const date = new Date(vote.timestamp);
+                        html += `
+                            <tr>
+                                <td><strong>${vote.option}</strong></td>
+                                <td><code>${vote.ip}</code></td>
+                                <td><code>${vote.fingerprint}</code></td>
+                                <td>${date.toLocaleString()}</td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('stats-content').innerHTML = html;
+                document.getElementById('stats-modal').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Cerrar modal de estadísticas
+        function closeStatsModal() {
+            document.getElementById('stats-modal').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer clic fuera de él
+        window.onclick = function(event) {
+            const modal = document.getElementById('stats-modal');
+            if (event.target == modal) {
+                closeStatsModal();
             }
         }
     </script>

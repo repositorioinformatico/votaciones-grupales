@@ -132,11 +132,14 @@ app.post('/api/surveys/:id/close', (req, res) => {
 
 // Registrar un voto
 app.post('/api/vote', (req, res) => {
-  const { surveyId, option, studentId } = req.body;
+  const { surveyId, option, studentId, fingerprint } = req.body;
 
   if (!surveyId || !option) {
     return res.status(400).json({ error: 'Se requiere surveyId y option' });
   }
+
+  // Capturar IP del cliente
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
 
   // Verificar que la encuesta existe y está activa
   const surveysData = readSurveys();
@@ -166,7 +169,9 @@ app.post('/api/vote', (req, res) => {
     surveyId,
     option,
     studentId: studentId || 'anonymous',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    ip: clientIp,
+    fingerprint: fingerprint || 'unknown'
   };
 
   votesData.votes.push(vote);
@@ -206,6 +211,36 @@ app.post('/api/reset', (req, res) => {
   saveSurveys({ surveys: [] });
   saveVotes({ votes: [] });
   res.json({ success: true, message: 'Datos reiniciados' });
+});
+
+// Obtener estadísticas detalladas de una encuesta (con IPs y fingerprints)
+app.get('/api/surveys/:id/stats', (req, res) => {
+  const { id } = req.params;
+
+  const surveysData = readSurveys();
+  const survey = surveysData.surveys.find(s => s.id === id);
+
+  if (!survey) {
+    return res.status(404).json({ error: 'Encuesta no encontrada' });
+  }
+
+  const votesData = readVotes();
+  const surveyVotes = votesData.votes.filter(v => v.surveyId === id);
+
+  // Mapear votos con todos los detalles
+  const detailedVotes = surveyVotes.map(vote => ({
+    option: vote.option,
+    timestamp: vote.timestamp,
+    ip: vote.ip || 'no disponible',
+    fingerprint: vote.fingerprint || 'unknown',
+    voteId: vote.id
+  }));
+
+  res.json({
+    survey,
+    votes: detailedVotes,
+    totalVotes: surveyVotes.length
+  });
 });
 
 // Inicializar archivos de datos
