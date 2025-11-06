@@ -12,11 +12,18 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Rutas de archivos JSON para persistencia
-const SURVEYS_FILE = path.join(__dirname, 'data', 'surveys.json');
-const VOTES_FILE = path.join(__dirname, 'data', 'votes.json');
+const DATA_DIR = path.join(__dirname, 'data');
+const SURVEYS_FILE = path.join(DATA_DIR, 'surveys.json');
+const VOTES_FILE = path.join(DATA_DIR, 'votes.json');
 
-// Inicializar archivos JSON si no existen
+// Inicializar directorio y archivos JSON si no existen
 function initializeDataFiles() {
+  // Crear directorio data/ si no existe
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  // Crear archivos JSON si no existen
   if (!fs.existsSync(SURVEYS_FILE)) {
     fs.writeFileSync(SURVEYS_FILE, JSON.stringify({ surveys: [] }, null, 2));
   }
