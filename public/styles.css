@@ -644,3 +644,236 @@ button {
     font-family: 'Courier New', monospace;
     letter-spacing: 2px;
 }
+
+/* Modal de confirmación personalizado */
+.confirm-modal {
+    display: none;
+    position: fixed;
+    z-index: 3000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.confirm-content {
+    background: white;
+    border: 3px solid #000;
+    border-radius: 8px;
+    padding: 30px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.confirm-content h3 {
+    color: #000;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    font-weight: 700;
+}
+
+.confirm-content p {
+    color: #666;
+    margin: 10px 0;
+    font-size: 1em;
+}
+
+.confirm-option {
+    background: #f5f5f5;
+    border: 2px solid #000;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 20px 0;
+    font-weight: 700;
+    font-size: 1.2em;
+    color: #000;
+    word-wrap: break-word;
+}
+
+.confirm-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 25px;
+    flex-direction: column;
+}
+
+.btn-confirm {
+    background: #000;
+    color: white;
+    border: 2px solid #000;
+    border-radius: 4px;
+    padding: 15px 30px;
+    font-size: 1.1em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.btn-confirm:active {
+    transform: scale(0.98);
+    background: #333;
+}
+
+.btn-cancel {
+    background: white;
+    color: #000;
+    border: 2px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 12px 30px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.btn-cancel:active {
+    transform: scale(0.98);
+    background: #f5f5f5;
+}
+
+/* Alerta personalizada */
+.custom-alert {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4000;
+    padding: 15px 25px;
+    border-radius: 8px;
+    border: 2px solid;
+    font-weight: 600;
+    font-size: 1em;
+    text-align: center;
+    animation: slideDown 0.3s ease;
+    max-width: 90%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateX(-50%) translateY(-100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+}
+
+.custom-alert.success {
+    background: #000;
+    color: white;
+    border-color: #000;
+}
+
+.custom-alert.error {
+    background: #fff;
+    color: #d32f2f;
+    border-color: #d32f2f;
+}
+
+.custom-alert.warning {
+    background: #fff;
+    color: #f57c00;
+    border-color: #f57c00;
+}
+
+.custom-alert.info {
+    background: #f5f5f5;
+    color: #000;
+    border-color: #000;
+}
+
+.custom-alert span {
+    margin: 0 5px;
+}
+
+#alert-icon {
+    font-size: 1.2em;
+}
+
+/* Mejoras para dispositivos táctiles */
+@media (hover: none) and (pointer: coarse) {
+    /* Dispositivos táctiles */
+    .vote-option:hover {
+        background: white;
+        color: inherit;
+        border-color: #e0e0e0;
+        transform: none;
+    }
+
+    .vote-option:hover .option-letter {
+        background: #000;
+        color: white;
+    }
+
+    .vote-option:active {
+        background: #000;
+        color: white;
+        border-color: #000;
+        transform: scale(0.98);
+    }
+
+    .vote-option:active .option-letter {
+        background: white;
+        color: #000;
+    }
+
+    /* Botones más grandes en móviles */
+    .btn-confirm,
+    .btn-cancel {
+        padding: 18px 30px;
+        font-size: 1.1em;
+        min-height: 55px;
+    }
+}
+
+/* Responsive para modales */
+@media (max-width: 768px) {
+    .confirm-content {
+        padding: 25px 20px;
+    }
+
+    .confirm-content h3 {
+        font-size: 1.3em;
+    }
+
+    .confirm-option {
+        font-size: 1.1em;
+        padding: 12px;
+    }
+
+    .custom-alert {
+        font-size: 0.95em;
+        padding: 12px 20px;
+    }
+}
