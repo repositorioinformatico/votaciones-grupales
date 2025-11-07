@@ -8,6 +8,8 @@ Sistema web de encuestas en tiempo real sin base de datos, diseñado para que un
 - **Tiempo real**: Los resultados se actualizan automáticamente
 - **Red LAN**: Accesible desde cualquier dispositivo conectado a la misma red
 - **Interfaz dual**: Panel de control para el profesor y vista de votación para alumnos
+- **Autenticación segura**: Sistema de contraseña maestra para acceso del profesor
+- **Exportación de datos**: Descarga resultados en formato CSV con estadísticas detalladas
 - **Fácil de usar**: Configuración simple en Windows
 
 ## Tecnologías Utilizadas
@@ -103,26 +105,35 @@ test-claude-code-web/
 
 ### Panel del Profesor (`profesor.html`)
 
-1. **Crear encuesta**:
+1. **Autenticación**:
+   - Sistema de contraseña maestra para acceso seguro
+   - Configuración de contraseña en el primer uso
+
+2. **Crear encuesta**:
    - Escribe la pregunta
    - Añade opciones de respuesta (mínimo 2)
    - Haz clic en "Crear Encuesta"
    - La encuesta se activa automáticamente
 
-2. **Ver resultados en tiempo real**:
+3. **Ver resultados en tiempo real**:
    - Los resultados se actualizan automáticamente cada 5 segundos
-   - Muestra gráficas de barras y porcentajes
+   - Muestra gráficas de pastel y barras con porcentajes
    - Muestra el total de votos
 
-3. **Cerrar encuesta**:
+4. **Estadísticas detalladas**:
+   - Ver información de cada voto (IP, fingerprint, fecha/hora)
+   - Exportar resultados a CSV con estadísticas completas
+
+5. **Cerrar encuesta**:
    - Haz clic en "Cerrar Encuesta" para finalizar la votación
    - Los alumnos ya no podrán votar
 
-4. **Historial**:
+6. **Historial**:
    - Ver encuestas anteriores
    - Consultar resultados de encuestas cerradas
+   - Descargar estadísticas en formato CSV
 
-5. **Limpiar datos**:
+7. **Limpiar datos**:
    - Botón para eliminar todas las encuestas y votos
 
 ### Panel de Alumnos (`alumno.html`)
@@ -244,11 +255,9 @@ El servidor proporciona los siguientes endpoints:
 
 ## Mejoras Futuras Posibles
 
-- [ ] Autenticación de profesor con contraseña
-- [ ] Exportar resultados a Excel/CSV
 - [ ] Múltiples encuestas activas simultáneas
 - [ ] Temporizador automático para cerrar encuestas
-- [ ] Gráficas más avanzadas (pie charts, etc.)
+- [ ] Gráficas más avanzadas
 - [ ] Modo oscuro
 
 ## Licencia

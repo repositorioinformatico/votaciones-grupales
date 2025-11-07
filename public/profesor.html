@@ -308,6 +308,7 @@
                     </div>
 
                     <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Ver Estadísticas</button>
+                    <button onclick="downloadCSV('${survey.id}')" class="btn-secondary">📥 Descargar CSV</button>
                     <button onclick="closeSurvey('${survey.id}')" class="btn-warning">Cerrar Encuesta</button>
                 </div>
             `;
@@ -420,6 +421,7 @@
                     <p class="survey-meta">Cerrada: ${new Date(survey.createdAt).toLocaleString()}</p>
                     <button onclick="showResults('${survey.id}')" class="btn-secondary">Ver Resultados</button>
                     <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Estadísticas</button>
+                    <button onclick="downloadCSV('${survey.id}')" class="btn-secondary">📥 Descargar CSV</button>
                 </div>
             `).join('');
         }
@@ -567,6 +569,65 @@
             const modal = document.getElementById('stats-modal');
             if (event.target == modal) {
                 closeStatsModal();
+            }
+        }
+
+        // Descargar resultados en CSV
+        async function downloadCSV(surveyId) {
+            try {
+                const response = await authFetch(`${API_URL}/api/surveys/${surveyId}/stats`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error al obtener estadísticas para exportar');
+                    return;
+                }
+
+                // Crear CSV
+                let csv = 'Pregunta,Opción Votada,IP,Fingerprint,Fecha/Hora\n';
+
+                data.votes.forEach(vote => {
+                    const date = new Date(vote.timestamp).toLocaleString();
+                    const question = data.survey.question.replace(/,/g, ';'); // Reemplazar comas en la pregunta
+                    const option = vote.option.replace(/,/g, ';'); // Reemplazar comas en la opción
+                    csv += `"${question}","${option}","${vote.ip}","${vote.fingerprint}","${date}"\n`;
+                });
+
+                // Añadir resumen al final
+                csv += '\n\nResumen de Resultados\n';
+                csv += 'Opción,Cantidad de Votos,Porcentaje\n';
+
+                const resultsResponse = await fetch(`${API_URL}/api/surveys/${surveyId}/results`);
+                const resultsData = await resultsResponse.json();
+
+                resultsData.results.forEach(result => {
+                    const percentage = resultsData.totalVotes > 0 ? (result.count / resultsData.totalVotes * 100).toFixed(1) : 0;
+                    const option = result.option.replace(/,/g, ';');
+                    csv += `"${option}",${result.count},${percentage}%\n`;
+                });
+
+                csv += `\nTotal de Votos,${resultsData.totalVotes}\n`;
+                csv += `Votos Máximos Permitidos,${data.survey.maxVotes}\n`;
+
+                // Descargar archivo
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+
+                // Nombre del archivo con fecha y hora
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `encuesta_${surveyId}_${timestamp}.csv`;
+
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al generar el archivo CSV');
             }
         }
     </script>
