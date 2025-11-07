@@ -142,7 +142,7 @@
                         ${survey.options.map((option, index) => `
                             <button
                                 class="vote-option"
-                                onclick="vote('${option}')"
+                                data-option="${option}"
                             >
                                 <span class="option-letter">${String.fromCharCode(65 + index)}</span>
                                 <span class="option-text">${option}</span>
@@ -153,18 +153,59 @@
             `;
 
             content.innerHTML = html;
+
+            // Agregar event listeners a los botones
+            const voteButtons = document.querySelectorAll('.vote-option');
+            voteButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const option = this.getAttribute('data-option');
+                    this.blur(); // Eliminar el focus del botón
+                    showConfirmModal(option);
+                });
+            });
+        }
+
+        // Mostrar modal de confirmación
+        function showConfirmModal(option) {
+            const modal = document.getElementById('confirm-modal');
+            const message = document.getElementById('confirm-message');
+            const confirmBtn = document.getElementById('confirm-yes');
+            const cancelBtn = document.getElementById('confirm-no');
+
+            message.textContent = option;
+            modal.style.display = 'flex';
+
+            // Eliminar listeners previos
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+            // Agregar nuevos listeners
+            document.getElementById('confirm-yes').addEventListener('click', () => {
+                hideConfirmModal();
+                vote(option);
+            });
+
+            document.getElementById('confirm-no').addEventListener('click', hideConfirmModal);
+        }
+
+        // Ocultar modal de confirmación
+        function hideConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'none';
         }
 
         // Votar
         async function vote(option) {
             if (hasVoted) {
-                alert('Ya has votado en esta encuesta');
+                showAlert('Ya has votado en esta encuesta', 'warning');
                 return;
             }
 
-            if (!confirm(`¿Confirmas tu voto por: ${option}?`)) {
-                return;
-            }
+            // Mostrar indicador de carga
+            showAlert('Enviando voto...', 'info');
 
             try {
                 const response = await fetch(`${API_URL}/api/vote`, {
@@ -181,14 +222,43 @@
 
                 if (response.ok) {
                     hasVoted = true;
-                    alert('✓ Voto registrado correctamente');
-                    loadActiveSurvey(); // Recargar para mostrar resultados
+                    showAlert('✓ Voto registrado correctamente', 'success');
+                    setTimeout(() => {
+                        loadActiveSurvey(); // Recargar para mostrar resultados
+                    }, 1000);
                 } else {
-                    alert(data.error || 'Error al registrar el voto');
+                    showAlert(data.error || 'Error al registrar el voto', 'error');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error de conexión con el servidor');
+                showAlert('Error de conexión con el servidor', 'error');
+            }
+        }
+
+        // Mostrar alerta personalizada
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.getElementById('custom-alert');
+            const alertMessage = document.getElementById('alert-message');
+            const alertIcon = document.getElementById('alert-icon');
+
+            // Iconos según tipo
+            const icons = {
+                success: '✓',
+                error: '⚠️',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            alertIcon.textContent = icons[type] || icons.info;
+            alertMessage.textContent = message;
+            alertDiv.className = `custom-alert ${type}`;
+            alertDiv.style.display = 'block';
+
+            // Auto-ocultar después de 3 segundos (excepto para info)
+            if (type !== 'info') {
+                setTimeout(() => {
+                    alertDiv.style.display = 'none';
+                }, 3000);
             }
         }
 
@@ -256,5 +326,24 @@
             `;
         }
     </script>
+
+    <!-- Modal de confirmación personalizado -->
+    <div id="confirm-modal" class="confirm-modal">
+        <div class="confirm-content">
+            <h3>Confirmar voto</h3>
+            <p>¿Confirmas tu voto por:</p>
+            <p class="confirm-option" id="confirm-message"></p>
+            <div class="confirm-buttons">
+                <button id="confirm-yes" class="btn-confirm">Sí, votar</button>
+                <button id="confirm-no" class="btn-cancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerta personalizada -->
+    <div id="custom-alert" class="custom-alert">
+        <span id="alert-icon"></span>
+        <span id="alert-message"></span>
+    </div>
 </body>
 </html>
