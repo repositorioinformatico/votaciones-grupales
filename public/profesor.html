@@ -5,12 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel del Profesor - Sistema de Encuestas</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <div class="container">
+    <!-- Pantalla de Login/Setup -->
+    <div id="auth-screen" class="auth-screen">
+        <div class="auth-box">
+            <h1>🔐 Acceso Profesor</h1>
+            <p id="auth-message">Ingresa la contraseña maestra</p>
+
+            <div class="form-group">
+                <input type="password" id="auth-password" placeholder="Contraseña" style="font-size: 1.1em; padding: 15px;">
+            </div>
+
+            <button onclick="handleAuth()" class="btn-primary" style="width: 100%;">Acceder</button>
+
+            <p id="auth-error" style="color: #ef5350; margin-top: 15px; display: none;"></p>
+        </div>
+    </div>
+
+    <div class="container" id="main-panel" style="display: none;">
         <header>
             <h1>📊 Panel del Profesor</h1>
-            <p class="subtitle">Sistema de Encuestas en Tiempo Real</p>
+            <button onclick="logout()" class="btn-secondary" style="float: right;">Cerrar Sesión</button>
         </header>
 
         <!-- Sección de crear encuesta -->
@@ -28,6 +45,12 @@
                     <input type="text" class="option-input" placeholder="Opción 2">
                 </div>
                 <button onclick="addOption()" class="btn-secondary">+ Añadir opción</button>
+            </div>
+
+            <div class="form-group">
+                <label for="max-votes">Número máximo de votos permitidos:</label>
+                <input type="number" id="max-votes" placeholder="Ej: 8" min="1" value="8">
+                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">Cuando se alcance este número, no se permitirán más votos</p>
             </div>
 
             <button onclick="createSurvey()" class="btn-primary">Crear Encuesta</button>
@@ -51,15 +74,118 @@
         </section>
     </div>
 
+    <!-- Modal de Estadísticas -->
+    <div id="stats-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeStatsModal()">&times;</span>
+            <h2>📊 Estadísticas Detalladas</h2>
+            <div id="stats-content"></div>
+        </div>
+    </div>
+
     <script>
         const API_URL = window.location.origin;
+        let adminPassword = null; // Contraseña en memoria
 
-        // Cargar encuestas al iniciar
-        window.addEventListener('DOMContentLoaded', () => {
+        // ========== AUTENTICACIÓN ==========
+
+        // Cargar estado de autenticación al iniciar
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkAuthStatus();
+        });
+
+        // Verificar si hay contraseña establecida
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/auth/status`);
+                const data = await response.json();
+
+                if (!data.hasPassword) {
+                    document.getElementById('auth-message').textContent = 'Establece una contraseña maestra (primera vez)';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Manejar autenticación (login o setup)
+        async function handleAuth() {
+            const password = document.getElementById('auth-password').value;
+
+            if (!password || password.length < 4) {
+                showAuthError('La contraseña debe tener al menos 4 caracteres');
+                return;
+            }
+
+            try {
+                // Primero intentar login
+                let response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                // Si falla, intentar setup (primera vez)
+                if (!response.ok) {
+                    response = await fetch(`${API_URL}/api/auth/setup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                }
+
+                if (response.ok) {
+                    adminPassword = password;
+                    showMainPanel();
+                } else {
+                    const error = await response.json();
+                    showAuthError(error.error || 'Error de autenticación');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAuthError('Error de conexión con el servidor');
+            }
+        }
+
+        // Mostrar error de autenticación
+        function showAuthError(message) {
+            const errorEl = document.getElementById('auth-error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // Mostrar panel principal
+        function showMainPanel() {
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('main-panel').style.display = 'block';
             loadSurveys();
             // Actualizar cada 5 segundos
             setInterval(loadSurveys, 5000);
-        });
+        }
+
+        // Cerrar sesión
+        function logout() {
+            if (confirm('¿Estás seguro de cerrar sesión?')) {
+                adminPassword = null;
+                document.getElementById('auth-screen').style.display = 'flex';
+                document.getElementById('main-panel').style.display = 'none';
+                document.getElementById('auth-password').value = '';
+            }
+        }
+
+        // Añadir header de autenticación a fetch
+        function authFetch(url, options = {}) {
+            if (!options.headers) {
+                options.headers = {};
+            }
+            options.headers['x-admin-password'] = adminPassword;
+            return fetch(url, options);
+        }
+
+        // ========== FIN AUTENTICACIÓN ==========
 
         // Añadir nueva opción
         function addOption() {
@@ -75,6 +201,7 @@
         // Crear encuesta
         async function createSurvey() {
             const question = document.getElementById('question').value.trim();
+            const maxVotes = parseInt(document.getElementById('max-votes').value);
             const optionInputs = document.querySelectorAll('.option-input');
             const options = Array.from(optionInputs)
                 .map(input => input.value.trim())
@@ -90,21 +217,29 @@
                 return;
             }
 
+            if (!maxVotes || maxVotes < 1) {
+                alert('Por favor, ingresa un número válido de votos máximos (mínimo 1)');
+                return;
+            }
+
             try {
-                const response = await fetch(`${API_URL}/api/surveys`, {
+                const response = await authFetch(`${API_URL}/api/surveys`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question, options })
+                    body: JSON.stringify({ question, options, maxVotes })
                 });
 
                 if (response.ok) {
                     alert('✓ Encuesta creada y activada correctamente');
+
                     // Limpiar formulario
                     document.getElementById('question').value = '';
+                    document.getElementById('max-votes').value = '8';
                     optionInputs.forEach(input => input.value = '');
                     loadSurveys();
                 } else {
-                    alert('Error al crear la encuesta');
+                    const error = await response.json();
+                    alert(error.error || 'Error al crear la encuesta');
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -115,7 +250,7 @@
         // Cargar encuestas
         async function loadSurveys() {
             try {
-                const response = await fetch(`${API_URL}/api/surveys`);
+                const response = await authFetch(`${API_URL}/api/surveys`);
                 const surveys = await response.json();
 
                 // Mostrar encuesta activa
@@ -151,27 +286,123 @@
                     <p class="survey-meta">Creada: ${new Date(survey.createdAt).toLocaleString()}</p>
                     <p class="survey-meta">Total de votos: ${totalVotes}</p>
 
-                    <div class="results">
-                        ${data.results.map(result => {
-                            const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
-                            const barWidth = totalVotes > 0 ? (result.count / maxVotes * 100) : 0;
-                            return `
-                                <div class="result-item">
-                                    <div class="result-label">${result.option}</div>
-                                    <div class="result-bar-container">
-                                        <div class="result-bar" style="width: ${barWidth}%"></div>
+                    <div class="results-container">
+                        <div class="results-chart">
+                            <canvas id="active-survey-chart"></canvas>
+                        </div>
+                        <div class="results">
+                            ${data.results.map(result => {
+                                const percentage = totalVotes > 0 ? (result.count / totalVotes * 100).toFixed(1) : 0;
+                                const barWidth = totalVotes > 0 ? (result.count / maxVotes * 100) : 0;
+                                return `
+                                    <div class="result-item">
+                                        <div class="result-label">${result.option}</div>
+                                        <div class="result-bar-container">
+                                            <div class="result-bar" style="width: ${barWidth}%"></div>
+                                        </div>
+                                        <div class="result-value">${result.count} votos (${percentage}%)</div>
                                     </div>
-                                    <div class="result-value">${result.count} votos (${percentage}%)</div>
-                                </div>
-                            `;
-                        }).join('')}
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
 
+                    <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Ver Estadísticas</button>
+                    <button onclick="downloadCSV('${survey.id}')" class="btn-secondary">📥 Descargar CSV</button>
                     <button onclick="closeSurvey('${survey.id}')" class="btn-warning">Cerrar Encuesta</button>
                 </div>
             `;
 
             document.getElementById('active-survey-content').innerHTML = html;
+
+            // Generar gráfico de pastel después de inyectar HTML
+            if (totalVotes > 0) {
+                createPieChart(data.results);
+            }
+        }
+
+        // Variable global para el gráfico (para poder destruirlo al actualizar)
+        let activeSurveyChartInstance = null;
+
+        // Crear gráfico de pastel
+        function createPieChart(results) {
+            const canvas = document.getElementById('active-survey-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior si existe
+            if (activeSurveyChartInstance) {
+                activeSurveyChartInstance.destroy();
+            }
+
+            const ctx = canvas.getContext('2d');
+
+            // Extraer datos
+            const labels = results.map(r => r.option);
+            const data = results.map(r => r.count);
+
+            // Generar colores en escala de grises (minimalista)
+            const colors = generateGrayscaleColors(results.length);
+
+            activeSurveyChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderColor: '#000',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#000',
+                                font: {
+                                    size: 13,
+                                    weight: '600'
+                                },
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#000',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#000',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} votos (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Generar colores en escala de grises
+        function generateGrayscaleColors(count) {
+            const colors = [];
+            const step = 180 / (count + 1); // Rango de 75 a 255 (evitar muy oscuro y muy claro)
+
+            for (let i = 0; i < count; i++) {
+                const gray = Math.round(75 + (step * (i + 1)));
+                colors.push(`rgb(${gray}, ${gray}, ${gray})`);
+            }
+
+            return colors;
         }
 
         // Mostrar historial
@@ -189,6 +420,8 @@
                     <h4>${survey.question}</h4>
                     <p class="survey-meta">Cerrada: ${new Date(survey.createdAt).toLocaleString()}</p>
                     <button onclick="showResults('${survey.id}')" class="btn-secondary">Ver Resultados</button>
+                    <button onclick="showStats('${survey.id}')" class="btn-secondary">📊 Estadísticas</button>
+                    <button onclick="downloadCSV('${survey.id}')" class="btn-secondary">📥 Descargar CSV</button>
                 </div>
             `).join('');
         }
@@ -200,7 +433,7 @@
             }
 
             try {
-                const response = await fetch(`${API_URL}/api/surveys/${id}/close`, {
+                const response = await authFetch(`${API_URL}/api/surveys/${id}/close`, {
                     method: 'POST'
                 });
 
@@ -245,7 +478,7 @@
             }
 
             try {
-                const response = await fetch(`${API_URL}/api/reset`, {
+                const response = await authFetch(`${API_URL}/api/reset`, {
                     method: 'POST'
                 });
 
@@ -258,6 +491,139 @@
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Mostrar estadísticas detalladas
+        async function showStats(surveyId) {
+            try {
+                const response = await authFetch(`${API_URL}/api/surveys/${surveyId}/stats`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error al obtener estadísticas');
+                    return;
+                }
+
+                const maxVotes = data.survey.maxVotes || 0;
+
+                let html = `
+                    <h3>${data.survey.question}</h3>
+                    <p><strong>Total de votos:</strong> ${data.totalVotes} / ${maxVotes}</p>
+                    <p><strong>Creada:</strong> ${new Date(data.survey.createdAt).toLocaleString()}</p>
+                    <p><strong>Estado:</strong> ${data.survey.status === 'active' ? 'Activa' : 'Cerrada'}</p>
+                    <br>
+                    <table class="stats-table">
+                        <thead>
+                            <tr>
+                                <th>Opción Votada</th>
+                                <th>Fecha/Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                if (data.votes.length === 0) {
+                    html += `
+                        <tr>
+                            <td colspan="2" style="text-align: center; color: #999;">No hay votos registrados</td>
+                        </tr>
+                    `;
+                } else {
+                    data.votes.forEach(vote => {
+                        const date = new Date(vote.timestamp);
+                        html += `
+                            <tr>
+                                <td><strong>${vote.option}</strong></td>
+                                <td>${date.toLocaleString()}</td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('stats-content').innerHTML = html;
+                document.getElementById('stats-modal').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Cerrar modal de estadísticas
+        function closeStatsModal() {
+            document.getElementById('stats-modal').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer clic fuera de él
+        window.onclick = function(event) {
+            const modal = document.getElementById('stats-modal');
+            if (event.target == modal) {
+                closeStatsModal();
+            }
+        }
+
+        // Descargar resultados en CSV
+        async function downloadCSV(surveyId) {
+            try {
+                const response = await authFetch(`${API_URL}/api/surveys/${surveyId}/stats`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error al obtener estadísticas para exportar');
+                    return;
+                }
+
+                // Crear CSV
+                let csv = 'Pregunta,Opción Votada,Fecha/Hora\n';
+
+                data.votes.forEach(vote => {
+                    const date = new Date(vote.timestamp).toLocaleString();
+                    const question = data.survey.question.replace(/,/g, ';'); // Reemplazar comas en la pregunta
+                    const option = vote.option.replace(/,/g, ';'); // Reemplazar comas en la opción
+                    csv += `"${question}","${option}","${date}"\n`;
+                });
+
+                // Añadir resumen al final
+                csv += '\n\nResumen de Resultados\n';
+                csv += 'Opción,Cantidad de Votos,Porcentaje\n';
+
+                const resultsResponse = await fetch(`${API_URL}/api/surveys/${surveyId}/results`);
+                const resultsData = await resultsResponse.json();
+
+                resultsData.results.forEach(result => {
+                    const percentage = resultsData.totalVotes > 0 ? (result.count / resultsData.totalVotes * 100).toFixed(1) : 0;
+                    const option = result.option.replace(/,/g, ';');
+                    csv += `"${option}",${result.count},${percentage}%\n`;
+                });
+
+                csv += `\nTotal de Votos,${resultsData.totalVotes}\n`;
+                csv += `Votos Máximos Permitidos,${data.survey.maxVotes}\n`;
+
+                // Descargar archivo
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+
+                // Nombre del archivo con fecha y hora
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `encuesta_${surveyId}_${timestamp}.csv`;
+
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al generar el archivo CSV');
             }
         }
     </script>

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3000;
@@ -12,16 +13,27 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Rutas de archivos JSON para persistencia
-const SURVEYS_FILE = path.join(__dirname, 'data', 'surveys.json');
-const VOTES_FILE = path.join(__dirname, 'data', 'votes.json');
+const DATA_DIR = path.join(__dirname, 'data');
+const SURVEYS_FILE = path.join(DATA_DIR, 'surveys.json');
+const VOTES_FILE = path.join(DATA_DIR, 'votes.json');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
-// Inicializar archivos JSON si no existen
+// Inicializar directorio y archivos JSON si no existen
 function initializeDataFiles() {
+  // Crear directorio data/ si no existe
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  // Crear archivos JSON si no existen
   if (!fs.existsSync(SURVEYS_FILE)) {
     fs.writeFileSync(SURVEYS_FILE, JSON.stringify({ surveys: [] }, null, 2));
   }
   if (!fs.existsSync(VOTES_FILE)) {
     fs.writeFileSync(VOTES_FILE, JSON.stringify({ votes: [] }, null, 2));
+  }
+  if (!fs.existsSync(CONFIG_FILE)) {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ passwordHash: null }, null, 2));
   }
 }
 
@@ -47,10 +59,91 @@ function saveVotes(data) {
   fs.writeFileSync(VOTES_FILE, JSON.stringify(data, null, 2));
 }
 
+// Leer configuración
+function readConfig() {
+  const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+  return JSON.parse(data);
+}
+
+// Guardar configuración
+function saveConfig(data) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2));
+}
+
+// Hashear contraseña
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+// Validar contraseña
+function validatePassword(password) {
+  const config = readConfig();
+  if (!config.passwordHash) {
+    return false; // No hay contraseña establecida
+  }
+  return hashPassword(password) === config.passwordHash;
+}
+
+// Middleware para validar autenticación
+function requireAuth(req, res, next) {
+  const password = req.headers['x-admin-password'];
+
+  if (!password || !validatePassword(password)) {
+    return res.status(401).json({ error: 'No autorizado - contraseña incorrecta' });
+  }
+
+  next();
+}
+
 // ========== ENDPOINTS ==========
 
+// ========== AUTENTICACIÓN ==========
+
+// Verificar si hay contraseña establecida
+app.get('/api/auth/status', (req, res) => {
+  const config = readConfig();
+  res.json({ hasPassword: config.passwordHash !== null });
+});
+
+// Establecer contraseña por primera vez
+app.post('/api/auth/setup', (req, res) => {
+  const { password } = req.body;
+
+  if (!password || password.length < 4) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+  }
+
+  const config = readConfig();
+
+  if (config.passwordHash !== null) {
+    return res.status(400).json({ error: 'Ya existe una contraseña establecida' });
+  }
+
+  config.passwordHash = hashPassword(password);
+  saveConfig(config);
+
+  res.json({ success: true, message: 'Contraseña establecida correctamente' });
+});
+
+// Validar contraseña (login)
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ error: 'Se requiere contraseña' });
+  }
+
+  if (validatePassword(password)) {
+    res.json({ success: true, message: 'Autenticación correcta' });
+  } else {
+    res.status(401).json({ error: 'Contraseña incorrecta' });
+  }
+});
+
+// ========== ENDPOINTS PROFESOR (PROTEGIDOS) ==========
+
 // Obtener todas las encuestas (para el profesor)
-app.get('/api/surveys', (req, res) => {
+app.get('/api/surveys', requireAuth, (req, res) => {
   const data = readSurveys();
   res.json(data.surveys);
 });
@@ -81,11 +174,48 @@ app.get('/api/active-survey', (req, res) => {
 });
 
 // Crear nueva encuesta
-app.post('/api/surveys', (req, res) => {
-  const { question, options } = req.body;
+app.post('/api/surveys', requireAuth, (req, res) => {
+  const { question, options, maxVotes } = req.body;
 
   if (!question || !options || options.length < 2) {
     return res.status(400).json({ error: 'Se requiere pregunta y al menos 2 opciones' });
+  }
+
+  if (!maxVotes || maxVotes < 1) {
+    return res.status(400).json({ error: 'Se requiere el número máximo de votos (mínimo 1)' });
+  }
+
+  // VALIDACIÓN 1: Verificar tipos de datos
+  if (typeof question !== 'string' || !Array.isArray(options) || typeof maxVotes !== 'number') {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+
+  // VALIDACIÓN 2: Verificar longitud máxima
+  if (question.length > 500) {
+    return res.status(400).json({ error: 'La pregunta es demasiado larga (máximo 500 caracteres)' });
+  }
+
+  if (options.length > 20) {
+    return res.status(400).json({ error: 'Demasiadas opciones (máximo 20)' });
+  }
+
+  // Verificar que todas las opciones sean strings y no muy largas
+  for (const option of options) {
+    if (typeof option !== 'string') {
+      return res.status(400).json({ error: 'Todas las opciones deben ser texto' });
+    }
+    if (option.length > 200) {
+      return res.status(400).json({ error: 'Las opciones son demasiado largas (máximo 200 caracteres)' });
+    }
+  }
+
+  // VALIDACIÓN 3: Sanitización contra XSS
+  const sanitizedQuestion = question.trim();
+  const sanitizedOptions = options.map(opt => opt.trim());
+
+  // Verificar que no haya opciones vacías después de sanitizar
+  if (sanitizedOptions.some(opt => opt.length === 0)) {
+    return res.status(400).json({ error: 'Las opciones no pueden estar vacías' });
   }
 
   const data = readSurveys();
@@ -95,10 +225,11 @@ app.post('/api/surveys', (req, res) => {
 
   const newSurvey = {
     id: Date.now().toString(),
-    question,
-    options,
+    question: sanitizedQuestion,
+    options: sanitizedOptions,
     status: 'active',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    maxVotes: maxVotes
   };
 
   data.surveys.push(newSurvey);
@@ -108,7 +239,7 @@ app.post('/api/surveys', (req, res) => {
 });
 
 // Cerrar encuesta activa
-app.post('/api/surveys/:id/close', (req, res) => {
+app.post('/api/surveys/:id/close', requireAuth, (req, res) => {
   const { id } = req.params;
   const data = readSurveys();
 
@@ -125,11 +256,24 @@ app.post('/api/surveys/:id/close', (req, res) => {
 
 // Registrar un voto
 app.post('/api/vote', (req, res) => {
-  const { surveyId, option, studentId } = req.body;
+  const { surveyId, option } = req.body;
 
   if (!surveyId || !option) {
     return res.status(400).json({ error: 'Se requiere surveyId y option' });
   }
+
+  // VALIDACIÓN 1: Verificar tipos de datos
+  if (typeof surveyId !== 'string' || typeof option !== 'string') {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+
+  // VALIDACIÓN 2: Verificar longitud máxima
+  if (surveyId.length > 50 || option.length > 500) {
+    return res.status(400).json({ error: 'Datos demasiado largos' });
+  }
+
+  // VALIDACIÓN 3: Sanitización contra XSS
+  const sanitizedOption = option.trim();
 
   // Verificar que la encuesta existe y está activa
   const surveysData = readSurveys();
@@ -139,26 +283,24 @@ app.post('/api/vote', (req, res) => {
     return res.status(400).json({ error: 'La encuesta no está activa' });
   }
 
-  // Verificar que la opción es válida
-  if (!survey.options.includes(option)) {
+  // Verificar que la opción es válida (usando la versión sanitizada)
+  if (!survey.options.includes(sanitizedOption)) {
     return res.status(400).json({ error: 'Opción no válida' });
   }
 
+  // Verificar número máximo de votos
   const votesData = readVotes();
+  const surveyVotes = votesData.votes.filter(v => v.surveyId === surveyId);
 
-  // Verificar si el estudiante ya votó (opcional - comentar si se permite votar varias veces)
-  if (studentId) {
-    const existingVote = votesData.votes.find(v => v.surveyId === surveyId && v.studentId === studentId);
-    if (existingVote) {
-      return res.status(400).json({ error: 'Ya has votado en esta encuesta' });
-    }
+  if (surveyVotes.length >= survey.maxVotes) {
+    return res.status(400).json({ error: 'Se ha alcanzado el número máximo de votos para esta encuesta' });
   }
 
+  // Registrar el voto (usando la opción sanitizada)
   const vote = {
     id: Date.now().toString(),
     surveyId,
-    option,
-    studentId: studentId || 'anonymous',
+    option: sanitizedOption,
     timestamp: new Date().toISOString()
   };
 
@@ -195,10 +337,37 @@ app.get('/api/surveys/:id/results', (req, res) => {
 });
 
 // Eliminar todos los datos (reset)
-app.post('/api/reset', (req, res) => {
+app.post('/api/reset', requireAuth, (req, res) => {
   saveSurveys({ surveys: [] });
   saveVotes({ votes: [] });
   res.json({ success: true, message: 'Datos reiniciados' });
+});
+
+// Obtener estadísticas detalladas de una encuesta
+app.get('/api/surveys/:id/stats', requireAuth, (req, res) => {
+  const { id } = req.params;
+
+  const surveysData = readSurveys();
+  const survey = surveysData.surveys.find(s => s.id === id);
+
+  if (!survey) {
+    return res.status(404).json({ error: 'Encuesta no encontrada' });
+  }
+
+  const votesData = readVotes();
+  const surveyVotes = votesData.votes.filter(v => v.surveyId === id);
+
+  // Mapear votos con todos los detalles
+  const detailedVotes = surveyVotes.map(vote => ({
+    option: vote.option,
+    timestamp: vote.timestamp
+  }));
+
+  res.json({
+    survey,
+    votes: detailedVotes,
+    totalVotes: surveyVotes.length
+  });
 });
 
 // Inicializar archivos de datos
