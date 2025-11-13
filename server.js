@@ -185,6 +185,39 @@ app.post('/api/surveys', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Se requiere el número máximo de votos (mínimo 1)' });
   }
 
+  // VALIDACIÓN 1: Verificar tipos de datos
+  if (typeof question !== 'string' || !Array.isArray(options) || typeof maxVotes !== 'number') {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+
+  // VALIDACIÓN 2: Verificar longitud máxima
+  if (question.length > 500) {
+    return res.status(400).json({ error: 'La pregunta es demasiado larga (máximo 500 caracteres)' });
+  }
+
+  if (options.length > 20) {
+    return res.status(400).json({ error: 'Demasiadas opciones (máximo 20)' });
+  }
+
+  // Verificar que todas las opciones sean strings y no muy largas
+  for (const option of options) {
+    if (typeof option !== 'string') {
+      return res.status(400).json({ error: 'Todas las opciones deben ser texto' });
+    }
+    if (option.length > 200) {
+      return res.status(400).json({ error: 'Las opciones son demasiado largas (máximo 200 caracteres)' });
+    }
+  }
+
+  // VALIDACIÓN 3: Sanitización contra XSS
+  const sanitizedQuestion = question.trim();
+  const sanitizedOptions = options.map(opt => opt.trim());
+
+  // Verificar que no haya opciones vacías después de sanitizar
+  if (sanitizedOptions.some(opt => opt.length === 0)) {
+    return res.status(400).json({ error: 'Las opciones no pueden estar vacías' });
+  }
+
   const data = readSurveys();
 
   // Cerrar cualquier encuesta activa anterior
@@ -192,8 +225,8 @@ app.post('/api/surveys', requireAuth, (req, res) => {
 
   const newSurvey = {
     id: Date.now().toString(),
-    question,
-    options,
+    question: sanitizedQuestion,
+    options: sanitizedOptions,
     status: 'active',
     createdAt: new Date().toISOString(),
     maxVotes: maxVotes
@@ -229,6 +262,19 @@ app.post('/api/vote', (req, res) => {
     return res.status(400).json({ error: 'Se requiere surveyId y option' });
   }
 
+  // VALIDACIÓN 1: Verificar tipos de datos
+  if (typeof surveyId !== 'string' || typeof option !== 'string') {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+
+  // VALIDACIÓN 2: Verificar longitud máxima
+  if (surveyId.length > 50 || option.length > 500) {
+    return res.status(400).json({ error: 'Datos demasiado largos' });
+  }
+
+  // VALIDACIÓN 3: Sanitización contra XSS
+  const sanitizedOption = option.trim();
+
   // Verificar que la encuesta existe y está activa
   const surveysData = readSurveys();
   const survey = surveysData.surveys.find(s => s.id === surveyId && s.status === 'active');
@@ -237,8 +283,8 @@ app.post('/api/vote', (req, res) => {
     return res.status(400).json({ error: 'La encuesta no está activa' });
   }
 
-  // Verificar que la opción es válida
-  if (!survey.options.includes(option)) {
+  // Verificar que la opción es válida (usando la versión sanitizada)
+  if (!survey.options.includes(sanitizedOption)) {
     return res.status(400).json({ error: 'Opción no válida' });
   }
 
@@ -250,11 +296,11 @@ app.post('/api/vote', (req, res) => {
     return res.status(400).json({ error: 'Se ha alcanzado el número máximo de votos para esta encuesta' });
   }
 
-  // Registrar el voto
+  // Registrar el voto (usando la opción sanitizada)
   const vote = {
     id: Date.now().toString(),
     surveyId,
-    option,
+    option: sanitizedOption,
     timestamp: new Date().toISOString()
   };
 
