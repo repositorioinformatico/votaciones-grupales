@@ -223,14 +223,11 @@ app.post('/api/surveys/:id/close', requireAuth, (req, res) => {
 
 // Registrar un voto
 app.post('/api/vote', (req, res) => {
-  const { surveyId, option, fingerprint } = req.body;
+  const { surveyId, option } = req.body;
 
   if (!surveyId || !option) {
     return res.status(400).json({ error: 'Se requiere surveyId y option' });
   }
-
-  // Capturar IP del cliente
-  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
 
   // Verificar que la encuesta existe y está activa
   const surveysData = readSurveys();
@@ -253,22 +250,12 @@ app.post('/api/vote', (req, res) => {
     return res.status(400).json({ error: 'Se ha alcanzado el número máximo de votos para esta encuesta' });
   }
 
-  // Verificar si este fingerprint o IP ya votó
-  const existingVoteByFingerprint = surveyVotes.find(v => v.fingerprint === fingerprint);
-  const existingVoteByIp = surveyVotes.find(v => v.ip === clientIp);
-
-  if (existingVoteByFingerprint || existingVoteByIp) {
-    return res.status(400).json({ error: 'Ya has votado en esta encuesta' });
-  }
-
   // Registrar el voto
   const vote = {
     id: Date.now().toString(),
     surveyId,
     option,
-    timestamp: new Date().toISOString(),
-    ip: clientIp,
-    fingerprint: fingerprint || 'unknown'
+    timestamp: new Date().toISOString()
   };
 
   votesData.votes.push(vote);
@@ -310,7 +297,7 @@ app.post('/api/reset', requireAuth, (req, res) => {
   res.json({ success: true, message: 'Datos reiniciados' });
 });
 
-// Obtener estadísticas detalladas de una encuesta (con IPs y fingerprints)
+// Obtener estadísticas detalladas de una encuesta
 app.get('/api/surveys/:id/stats', requireAuth, (req, res) => {
   const { id } = req.params;
 
@@ -327,9 +314,7 @@ app.get('/api/surveys/:id/stats', requireAuth, (req, res) => {
   // Mapear votos con todos los detalles
   const detailedVotes = surveyVotes.map(vote => ({
     option: vote.option,
-    timestamp: vote.timestamp,
-    ip: vote.ip || 'no disponible',
-    fingerprint: vote.fingerprint || 'unknown'
+    timestamp: vote.timestamp
   }));
 
   res.json({

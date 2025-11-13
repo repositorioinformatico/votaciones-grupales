@@ -517,8 +517,6 @@
                         <thead>
                             <tr>
                                 <th>Opción Votada</th>
-                                <th>IP</th>
-                                <th>Fingerprint</th>
                                 <th>Fecha/Hora</th>
                             </tr>
                         </thead>
@@ -528,7 +526,7 @@
                 if (data.votes.length === 0) {
                     html += `
                         <tr>
-                            <td colspan="4" style="text-align: center; color: #999;">No hay votos registrados</td>
+                            <td colspan="2" style="text-align: center; color: #999;">No hay votos registrados</td>
                         </tr>
                     `;
                 } else {
@@ -537,8 +535,6 @@
                         html += `
                             <tr>
                                 <td><strong>${vote.option}</strong></td>
-                                <td><code>${vote.ip}</code></td>
-                                <td><code>${vote.fingerprint}</code></td>
                                 <td>${date.toLocaleString()}</td>
                             </tr>
                         `;
@@ -584,13 +580,13 @@
                 }
 
                 // Crear CSV
-                let csv = 'Pregunta,Opción Votada,IP,Fingerprint,Fecha/Hora\n';
+                let csv = 'Pregunta,Opción Votada,Fecha/Hora\n';
 
                 data.votes.forEach(vote => {
                     const date = new Date(vote.timestamp).toLocaleString();
                     const question = data.survey.question.replace(/,/g, ';'); // Reemplazar comas en la pregunta
                     const option = vote.option.replace(/,/g, ';'); // Reemplazar comas en la opción
-                    csv += `"${question}","${option}","${vote.ip}","${vote.fingerprint}","${date}"\n`;
+                    csv += `"${question}","${option}","${date}"\n`;
                 });
 
                 // Añadir resumen al final
