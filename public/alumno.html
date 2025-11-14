@@ -26,19 +26,22 @@
         const API_URL = window.location.origin;
         let currentSurveyId = null;
         let hasVoted = false;
-        let studentId = null;
 
-        // Generar ID único para el estudiante (basado en navegador)
-        function getStudentId() {
-            let id = localStorage.getItem('studentId');
-            if (!id) {
-                id = 'student_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('studentId', id);
-            }
-            return id;
+        // ANTI-FRAUDE: Verificar si ya votó en esta encuesta (localStorage)
+        // Esta es la capa 2 de seguridad (capa 1 es el fingerprint en servidor)
+        function hasVotedInSurvey(surveyId) {
+            const votedSurveys = JSON.parse(localStorage.getItem('votedSurveys') || '[]');
+            return votedSurveys.includes(surveyId);
         }
 
-        studentId = getStudentId();
+        // ANTI-FRAUDE: Registrar que votó en esta encuesta
+        function markAsVoted(surveyId) {
+            const votedSurveys = JSON.parse(localStorage.getItem('votedSurveys') || '[]');
+            if (!votedSurveys.includes(surveyId)) {
+                votedSurveys.push(surveyId);
+                localStorage.setItem('votedSurveys', JSON.stringify(votedSurveys));
+            }
+        }
 
         // Cargar encuesta activa al iniciar
         window.addEventListener('DOMContentLoaded', () => {
@@ -67,10 +70,10 @@
                     return;
                 }
 
-                // Si es una nueva encuesta, resetear el estado de votado
+                // Si es una nueva encuesta, verificar localStorage
                 if (currentSurveyId !== survey.id) {
                     currentSurveyId = survey.id;
-                    hasVoted = false;
+                    hasVoted = hasVotedInSurvey(survey.id); // Verificar capa 2
                 }
 
                 showSurvey(survey);
@@ -169,7 +172,8 @@
 
         // Votar
         async function vote(option) {
-            if (hasVoted) {
+            // ANTI-FRAUDE: Verificar capa 2 (localStorage)
+            if (hasVoted || hasVotedInSurvey(currentSurveyId)) {
                 showAlert('Ya has votado en esta encuesta', 'warning');
                 return;
             }
@@ -190,12 +194,19 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    // ANTI-FRAUDE: Marcar como votado en ambas capas
                     hasVoted = true;
+                    markAsVoted(currentSurveyId);
                     showAlert('✓ Voto registrado correctamente', 'success');
                     setTimeout(() => {
                         loadActiveSurvey(); // Recargar para mostrar resultados
                     }, 1000);
                 } else {
+                    // Si el servidor detectó voto duplicado, también marcar en cliente
+                    if (data.code === 'ALREADY_VOTED') {
+                        hasVoted = true;
+                        markAsVoted(currentSurveyId);
+                    }
                     showAlert(data.error || 'Error al registrar el voto', 'error');
                 }
             } catch (error) {

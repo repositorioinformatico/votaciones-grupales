@@ -75,6 +75,23 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+// Generar fingerprint único del votante (IP + User-Agent + salt de encuesta)
+// Esto hace extremadamente difícil votar dos veces sin ser detectado
+function generateVoterFingerprint(ip, userAgent, surveyId) {
+  // Normalizamos la IP (por si viene con ::ffff: prefix en IPv6)
+  const normalizedIP = ip.replace(/^::ffff:/, '');
+
+  // Usamos el surveyId como salt para que cada encuesta tenga hashes diferentes
+  // Esto previene correlación entre encuestas diferentes
+  const fingerprintData = `${normalizedIP}|${userAgent}|${surveyId}`;
+
+  // Doble hash para mayor seguridad
+  const hash1 = crypto.createHash('sha256').update(fingerprintData).digest('hex');
+  const hash2 = crypto.createHash('sha256').update(hash1 + surveyId).digest('hex');
+
+  return hash2;
+}
+
 // Validar contraseña
 function validatePassword(password) {
   const config = readConfig();
@@ -288,26 +305,41 @@ app.post('/api/vote', (req, res) => {
     return res.status(400).json({ error: 'Opción no válida' });
   }
 
-  // Verificar número máximo de votos
+  // ANTI-FRAUDE: Generar fingerprint del votante
+  const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  const voterFingerprint = generateVoterFingerprint(clientIP, userAgent, surveyId);
+
+  // ANTI-FRAUDE: Verificar si este fingerprint ya votó en esta encuesta
   const votesData = readVotes();
   const surveyVotes = votesData.votes.filter(v => v.surveyId === surveyId);
 
+  const alreadyVoted = surveyVotes.some(v => v.fingerprint === voterFingerprint);
+  if (alreadyVoted) {
+    return res.status(403).json({
+      error: 'Ya has votado en esta encuesta',
+      code: 'ALREADY_VOTED'
+    });
+  }
+
+  // Verificar número máximo de votos
   if (surveyVotes.length >= survey.maxVotes) {
     return res.status(400).json({ error: 'Se ha alcanzado el número máximo de votos para esta encuesta' });
   }
 
-  // Registrar el voto (usando la opción sanitizada)
+  // Registrar el voto (usando la opción sanitizada y el fingerprint)
   const vote = {
     id: Date.now().toString(),
     surveyId,
     option: sanitizedOption,
+    fingerprint: voterFingerprint, // Almacenamos el hash, NUNCA la IP real
     timestamp: new Date().toISOString()
   };
 
   votesData.votes.push(vote);
   saveVotes(votesData);
 
-  res.json({ success: true, vote });
+  res.json({ success: true, vote: { id: vote.id, surveyId, option: sanitizedOption, timestamp: vote.timestamp } });
 });
 
 // Obtener resultados de una encuesta
